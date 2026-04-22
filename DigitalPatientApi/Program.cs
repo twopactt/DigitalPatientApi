@@ -1,4 +1,5 @@
 using DigitalPatientApi.DatabaseContext;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
 
 namespace DigitalPatientApi
@@ -14,6 +15,20 @@ namespace DigitalPatientApi
                 options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
             });
 
+            builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+                .AddCookie(options =>
+                {
+                    options.LoginPath = "/api/auth/login";
+                    options.LogoutPath = "/api/auth/logout";
+                    options.Cookie.HttpOnly = true;
+                    options.Events.OnRedirectToAccessDenied = context =>
+                    {
+                        context.Response.StatusCode = 403;
+                        return Task.CompletedTask;
+                    };
+                });
+
+            builder.Services.AddAuthorization();
             builder.Services.AddControllers();
             builder.Services.AddSwaggerGen();
 
@@ -26,12 +41,9 @@ namespace DigitalPatientApi
             }
 
             app.UseHttpsRedirection();
-
+            app.UseAuthentication();
             app.UseAuthorization();
-
-
             app.MapControllers();
-
             app.Run();
         }
     }

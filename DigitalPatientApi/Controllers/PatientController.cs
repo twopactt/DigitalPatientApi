@@ -1,12 +1,15 @@
 ﻿using DigitalPatientApi.DatabaseContext;
 using DigitalPatientApi.Models;
 using DigitalPatientApi.RequestModels;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
 namespace DigitalPatientApi.Controllers
 {
     [Route("api/[controller]")]
+    [Authorize]
     [ApiController]
 
     public class PatientController : ControllerBase
@@ -19,6 +22,7 @@ namespace DigitalPatientApi.Controllers
         }
 
         [HttpGet]
+        [Authorize(Roles = "врач,администратор")]
         public async Task<IActionResult> GetAllPatients()
         {
             var patients = await _db.Patients
@@ -254,7 +258,14 @@ namespace DigitalPatientApi.Controllers
 
         private int GetCurrentUserId()
         {
-            return 1;
+            var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            if (string.IsNullOrEmpty(userIdClaim))
+            {
+                return 0;
+            }
+
+            return int.Parse(userIdClaim);
         }
     }
 }
