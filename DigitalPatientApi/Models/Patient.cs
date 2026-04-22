@@ -7,7 +7,7 @@ public partial class Patient
 {
     public int Id { get; set; }
 
-    public DateOnly Birthday { get; set; }
+    public DateTime Birthday { get; set; }
 
     public int GenderId { get; set; }
 
@@ -29,6 +29,8 @@ public partial class Patient
 
     public virtual ICollection<Notification> Notifications { get; set; } = new List<Notification>();
 
+    public virtual ICollection<PatientChronicDisease> PatientChronicDiseases { get; set; } = new List<PatientChronicDisease>();
+
     public virtual PatientStatus PatientStatus { get; set; } = null!;
 
     public virtual ICollection<Prescription> Prescriptions { get; set; } = new List<Prescription>();
@@ -36,6 +38,4 @@ public partial class Patient
     public virtual ICollection<TwinState> TwinStates { get; set; } = new List<TwinState>();
 
     public virtual User User { get; set; } = null!;
-
-    public virtual ICollection<ChronicDisease> ChronicDiseases { get; set; } = new List<ChronicDisease>();
 }

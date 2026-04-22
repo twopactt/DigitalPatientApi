@@ -25,7 +25,7 @@ public partial class Measurement
 
     public bool IsOffline { get; set; }
 
-    public virtual Patient Patient { get; set; } = null!;
+    public virtual ICollection<MeasurementComplaint> MeasurementComplaints { get; set; } = new List<MeasurementComplaint>();
 
-    public virtual ICollection<Complaint> Complaints { get; set; } = new List<Complaint>();
+    public virtual Patient Patient { get; set; } = null!;
 }

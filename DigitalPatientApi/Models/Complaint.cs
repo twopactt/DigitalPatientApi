@@ -9,5 +9,5 @@ public partial class Complaint
 
     public string Name { get; set; } = null!;
 
-    public virtual ICollection<Measurement> Measurements { get; set; } = new List<Measurement>();
+    public virtual ICollection<MeasurementComplaint> MeasurementComplaints { get; set; } = new List<MeasurementComplaint>();
 }
