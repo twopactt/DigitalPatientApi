@@ -1,5 +1,6 @@
 ﻿using DigitalPatientApi.DatabaseContext;
 using DigitalPatientApi.RequestModels;
+using DigitalPatientApi.ResponceModels;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
@@ -29,7 +30,7 @@ namespace DigitalPatientApi.Controllers
 
             if (user == null)
             {
-                return Unauthorized(new { success = false, message = "Неверный логин или пароль" });
+                return Unauthorized(ApiResponse<object>.Error("Неверный логин или пароль", "INVALID_CREDENTIALS"));
             }
 
             int? patientId = null;
@@ -64,59 +65,20 @@ namespace DigitalPatientApi.Controllers
                 new ClaimsPrincipal(claimsIdentity), authProperties
             );
 
-            return Ok(new
+            return Ok(ApiResponse<object>.Ok(new
             {
-                success = true,
-                message = "Вход выполнен успешно",
-                data = new
-                {
-                    userId = user.Id,
-                    role = user.Role.Name,
-                    fullName = $"{user.Surname} {user.Name} {user.Patronymic ?? ""}".Trim(),
-                    patientId = patientId
-                }
-            });
+                userId = user.Id,
+                role = user.Role.Name,
+                fullName = $"{user.Surname} {user.Name} {user.Patronymic ?? ""}".Trim(),
+                patientId = patientId
+            }, "Вход выполнен успешно"));
         }
 
         [HttpPost("logout")]
         public async Task<IActionResult> Logout()
         {
             await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-            return Ok(new { success = true, message = "Выход выполнен" });
-        }
-
-        [HttpGet("me")]
-        public async Task<IActionResult> GetCurrentUser()
-        {
-            if (!User.Identity.IsAuthenticated)
-            {
-                return Unauthorized(new { success = false, message = "Не авторизован" });
-            }
-
-            var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier));
-            var user = await _db.Users
-                .Include(u => u.Role)
-                .FirstOrDefaultAsync(u => u.Id == userId);
-
-            if (user == null)
-            {
-                return NotFound(new { success = false, message = "Пользователь не найден" });
-            }
-
-            return Ok(new
-            {
-                success = true,
-                data = new
-                {
-                    user.Id,
-                    user.Login,
-                    user.Surname,
-                    user.Name,
-                    user.Patronymic,
-                    role = user.Role.Name,
-                    patientId = User.FindFirstValue("PatientId")
-                }
-            });
+            return Ok(ApiResponse<object>.Ok(null, "Выход выполнен"));
         }
     }
 }

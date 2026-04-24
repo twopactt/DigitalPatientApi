@@ -1,6 +1,7 @@
 ﻿using DigitalPatientApi.DatabaseContext;
 using DigitalPatientApi.Models;
 using DigitalPatientApi.RequestModels;
+using DigitalPatientApi.ResponceModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -44,13 +45,15 @@ namespace DigitalPatientApi.Controllers
                 })
                 .ToListAsync();
 
-            return Ok(new { success = true, data = patients });
+            return Ok(ApiResponse<object>.Ok(patients));
         }
-
 
         [HttpGet("{id}")]
         public async Task<IActionResult> GetPatientById(int id)
         {
+            var currentUserRole = User.FindFirstValue(ClaimTypes.Role);
+            var currentUserId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier));
+
             var patient = await _db.Patients
                 .Include(p => p.User)
                 .Include(p => p.Gender)
@@ -61,7 +64,16 @@ namespace DigitalPatientApi.Controllers
 
             if (patient == null)
             {
-                return NotFound(new { success = false, message = "Пациент не найден" });
+                return NotFound(ApiResponse<object>.Error("Пациент не найден", "PATIENT_NOT_FOUND"));
+            }
+
+            if (currentUserRole == "пациент")
+            {
+                var currentPatient = await _db.Patients.FirstOrDefaultAsync(p => p.UserId == currentUserId);
+                if (currentPatient == null || currentPatient.Id != id)
+                {
+                    return StatusCode(403, ApiResponse<object>.Error("Доступ запрещён", "FORBIDDEN"));
+                }
             }
 
             var result = new
@@ -86,22 +98,22 @@ namespace DigitalPatientApi.Controllers
                 patient.UpdatedAt
             };
 
-            return Ok(new { success = true, data = result });
+            return Ok(ApiResponse<object>.Ok(result));
         }
 
-
         [HttpPost]
+        [Authorize(Roles = "врач,администратор")]
         public async Task<IActionResult> CreatePatient([FromBody] CreatePatientRequest request)
         {
             if (!ModelState.IsValid)
             {
-                return BadRequest(new { success = false, message = "Неверные данные", errors = ModelState });
+                return BadRequest(ApiResponse<object>.Error("Неверные данные", "INVALID_DATA"));
             }
 
             var existingUser = await _db.Users.FirstOrDefaultAsync(u => u.Login == request.Login);
             if (existingUser != null)
             {
-                return BadRequest(new { success = false, message = "Пользователь с таким логином уже существует" });
+                return BadRequest(ApiResponse<object>.Error("Пользователь с таким логином уже существует", "LOGIN_EXISTS"));
             }
 
             using var transaction = await _db.Database.BeginTransactionAsync();
@@ -145,7 +157,6 @@ namespace DigitalPatientApi.Controllers
                             ChronicDiseaseId = diseaseId
                         });
                     }
-
                     await _db.SaveChangesAsync();
                 }
 
@@ -159,22 +170,21 @@ namespace DigitalPatientApi.Controllers
                     NewValue = $"Создан пациент {request.Surname} {request.Name}",
                     CreatedAt = DateTime.Now
                 });
-
                 await _db.SaveChangesAsync();
 
                 await transaction.CommitAsync();
 
-                return Ok(new { success = true, message = "Пациент успешно создан", data = new { patientId = patient.Id, userId = user.Id } });
+                return Ok(ApiResponse<object>.Ok(new { patientId = patient.Id, userId = user.Id }, "Пациент успешно создан"));
             }
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
-                return StatusCode(500, new { success = false, message = "Ошибка при создании пациента", error = ex.Message });
+                return StatusCode(500, ApiResponse<object>.Error($"Ошибка при создании пациента: {ex.Message}", "INTERNAL_ERROR"));
             }
         }
 
-
         [HttpPut("{id}")]
+        [Authorize(Roles = "врач,администратор")]
         public async Task<IActionResult> UpdatePatient(int id, [FromBody] UpdatePatientRequest request)
         {
             var patient = await _db.Patients
@@ -183,7 +193,7 @@ namespace DigitalPatientApi.Controllers
 
             if (patient == null)
             {
-                return NotFound(new { success = false, message = "Пациент не найден" });
+                return NotFound(ApiResponse<object>.Error("Пациент не найден", "PATIENT_NOT_FOUND"));
             }
 
             using var transaction = await _db.Database.BeginTransactionAsync();
@@ -198,7 +208,6 @@ namespace DigitalPatientApi.Controllers
                 if (request.PatientStatusId.HasValue) patient.PatientStatusId = request.PatientStatusId.Value;
 
                 patient.UpdatedAt = DateTime.Now;
-
                 await _db.SaveChangesAsync();
 
                 _db.AuditLogs.Add(new AuditLog
@@ -211,33 +220,31 @@ namespace DigitalPatientApi.Controllers
                     NewValue = $"Обновлены данные пациента {patient.User.Surname} {patient.User.Name}",
                     CreatedAt = DateTime.Now
                 });
-
                 await _db.SaveChangesAsync();
 
                 await transaction.CommitAsync();
 
-                return Ok(new { success = true, message = "Данные пациента обновлены" });
+                return Ok(ApiResponse<object>.Ok(null, "Данные пациента обновлены"));
             }
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
-                return StatusCode(500, new { success = false, message = "Ошибка при обновлении", error = ex.Message });
+                return StatusCode(500, ApiResponse<object>.Error($"Ошибка при обновлении: {ex.Message}", "INTERNAL_ERROR"));
             }
         }
 
-
         [HttpDelete("{id}")]
+        [Authorize(Roles = "врач,администратор")]
         public async Task<IActionResult> DeletePatient(int id)
         {
             var patient = await _db.Patients.FindAsync(id);
             if (patient == null)
             {
-                return NotFound(new { success = false, message = "Пациент не найден" });
+                return NotFound(ApiResponse<object>.Error("Пациент не найден", "PATIENT_NOT_FOUND"));
             }
 
             patient.PatientStatusId = 2;
             patient.UpdatedAt = DateTime.Now;
-
             await _db.SaveChangesAsync();
 
             _db.AuditLogs.Add(new AuditLog
@@ -247,25 +254,18 @@ namespace DigitalPatientApi.Controllers
                 EntityType = "Patient",
                 EntityId = patient.Id,
                 OldValue = null,
-                NewValue = $"Пациент архивирован",
+                NewValue = "Пациент архивирован",
                 CreatedAt = DateTime.Now
             });
-
             await _db.SaveChangesAsync();
 
-            return Ok(new { success = true, message = "Пациент архивирован" });
+            return Ok(ApiResponse<object>.Ok(null, "Пациент архивирован"));
         }
 
         private int GetCurrentUserId()
         {
             var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-            if (string.IsNullOrEmpty(userIdClaim))
-            {
-                return 0;
-            }
-
-            return int.Parse(userIdClaim);
+            return string.IsNullOrEmpty(userIdClaim) ? 0 : int.Parse(userIdClaim);
         }
     }
 }
